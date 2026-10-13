@@ -4,9 +4,8 @@ import time
 import glob
 from gpiozero import Button
 
-# --- Налаштування шляхів та папок ---
+# --- Налаштування шляхів ---
 HOME_DIR = "/home/pi/movies"
-DIR_LIST = ['bandura', 'tour', 'tech', 'history', 'music']
 
 # --- Призначення 4 кнопок (BCM 16, 20, 21, 26) ---
 PIN_DIR_NEXT = 16   # Наступна папка
@@ -42,8 +41,20 @@ def stop_all():
     time.sleep(0.2)
 
 
+def get_directories():
+    """Автоматичне виявлення всіх піддиректорій у HOME_DIR"""
+    if not os.path.exists(HOME_DIR):
+        return []
+    
+    dirs = [
+        d for d in os.listdir(HOME_DIR) 
+        if os.path.isdir(os.path.join(HOME_DIR, d)) and not d.startswith('.')
+    ]
+    return sorted(dirs)
+
+
 def get_playlist(folder_name):
-    """Отримання відсортованого списку файлів у папці"""
+    """Отримання відсортованого списку файлів у конкретній папці"""
     folder_path = os.path.join(HOME_DIR, folder_name)
     if not os.path.exists(folder_path):
         return []
@@ -57,25 +68,37 @@ def get_playlist(folder_name):
 
 def action_dir_next():
     global current_dir_index, current_video_index, switch_requested
+    dir_list = get_directories()
+    if not dir_list:
+        return
+
     print("\n[EVENT] -> Наступна папка (BCM 16)")
     stop_all()
-    current_dir_index = (current_dir_index + 1) % len(DIR_LIST)
+    current_dir_index = (current_dir_index + 1) % len(dir_list)
     current_video_index = 0
     switch_requested = True
 
 
 def action_dir_prev():
     global current_dir_index, current_video_index, switch_requested
+    dir_list = get_directories()
+    if not dir_list:
+        return
+
     print("\n[EVENT] <- Попередня папка (BCM 20)")
     stop_all()
-    current_dir_index = (current_dir_index - 1) % len(DIR_LIST)
+    current_dir_index = (current_dir_index - 1) % len(dir_list)
     current_video_index = 0
     switch_requested = True
 
 
 def action_vid_next():
     global current_video_index, switch_requested
-    folder = DIR_LIST[current_dir_index]
+    dir_list = get_directories()
+    if not dir_list or current_dir_index >= len(dir_list):
+        return
+
+    folder = dir_list[current_dir_index]
     playlist = get_playlist(folder)
     
     if not playlist:
@@ -89,7 +112,11 @@ def action_vid_next():
 
 def action_vid_prev():
     global current_video_index, switch_requested
-    folder = DIR_LIST[current_dir_index]
+    dir_list = get_directories()
+    if not dir_list or current_dir_index >= len(dir_list):
+        return
+
+    folder = dir_list[current_dir_index]
     playlist = get_playlist(folder)
     
     if not playlist:
@@ -104,7 +131,6 @@ def action_vid_prev():
 # --- Ініціалізація кнопок ---
 prepare_screen()
 
-# Збільшено bounce_time до 0.3с для запобігання хибним наводкам між 20 і 21
 btn_dir_next = Button(PIN_DIR_NEXT, pull_up=True, bounce_time=0.3)
 btn_dir_next.when_pressed = action_dir_next
 
@@ -117,18 +143,17 @@ btn_vid_next.when_pressed = action_vid_next
 btn_vid_prev = Button(PIN_VID_PREV, pull_up=True, bounce_time=0.3)
 btn_vid_prev.when_pressed = action_vid_prev
 
-print(f"Ініціалізовано 4 кнопки (BCM 16, 20, 21, 26)")
+print(f"Ініціалізовано 4 кнопки (BCM {PIN_DIR_NEXT}, {PIN_DIR_PREV}, {PIN_VID_NEXT}, {PIN_VID_PREV})")
 
 
-def run_video(path, total_videos):
+def run_video(folder_name, path, total_videos):
     global switch_requested, current_proc
     
     if not os.path.exists(path):
         print(f"Помилка: Файл {path} не знайдено")
         return False
 
-    folder_name = DIR_LIST[current_dir_index].upper()
-    osd_message = f"Папка: {folder_name} ({current_video_index + 1}/{total_videos})"
+    osd_message = f"Папка: {folder_name.upper()} ({current_video_index + 1}/{total_videos})"
 
     cmd = [
         "mpv",
@@ -146,7 +171,7 @@ def run_video(path, total_videos):
         path
     ]
     
-    print(f"Відтворення [{folder_name}]: {os.path.basename(path)}")
+    print(f"Відтворення [{folder_name.upper()}]: {os.path.basename(path)}")
     
     current_proc = subprocess.Popen(
         cmd, 
@@ -183,29 +208,46 @@ try:
     print("\nСистема готова. Запуск відтворення...")
     
     while True:
-        folder = DIR_LIST[current_dir_index]
+        dir_list = get_directories()
+        
+        # Перевірка наявності папок у директорії movies
+        if not dir_list:
+            print(f"Увага: Не знайдено піддиректорій у {HOME_DIR}. Очікування...")
+            time.sleep(3)
+            continue
+
+        # Корекція current_dir_index у разі зміни кількості папок
+        if current_dir_index >= len(dir_list):
+            current_dir_index = 0
+
+        folder = dir_list[current_dir_index]
         playlist = get_playlist(folder)
         
+        # Якщо папка порожня — переходимо до наступної
         if not playlist:
             print(f"Порожня папка: {folder}. Перехід далі...")
-            current_dir_index = (current_dir_index + 1) % len(DIR_LIST)
+            current_dir_index = (current_dir_index + 1) % len(dir_list)
             current_video_index = 0
             time.sleep(1)
             continue
 
+        # Корекція current_video_index
         if current_video_index >= len(playlist):
             current_video_index = 0
 
         current_file = playlist[current_video_index]
         switch_requested = False
         
-        interrupted = run_video(current_file, len(playlist))
+        interrupted = run_video(folder, current_file, len(playlist))
         
         if not interrupted:
             current_video_index += 1
             if current_video_index >= len(playlist):
                 current_video_index = 0
-                current_dir_index = (current_dir_index + 1) % len(DIR_LIST)
+                # Оновлюємо список папок перед переходом на наступну
+                dir_list = get_directories()
+                if dir_list:
+                    current_dir_index = (current_dir_index + 1) % len(dir_list)
 
 except KeyboardInterrupt:
     stop_all()
