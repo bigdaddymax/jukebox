@@ -382,8 +382,8 @@ def run_video(folder_name, path, total_videos):
         "--quiet",
         "--vo=gpu",
         "--gpu-context=drm",
-        "--hwdec=auto",
-        "--ao=null",
+        "--hwdec=v4l2copy",        # Використовуємо коректне прискорення замість auto/cuda
+        "--ao=alsa",               # Увімкнення нормального виводу звуку через ALSA
         f"--osd-msg1={osd_message}",
         "--osd-duration=2500",
         "--osd-font-size=35",
@@ -429,7 +429,6 @@ def run_video(folder_name, path, total_videos):
                 return False
 
         time.sleep(0.1)
-
 
 # --- Головний цикл ---
 try:
