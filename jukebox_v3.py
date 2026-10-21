@@ -17,7 +17,11 @@ MPV_ERR_LOG = "/var/log/jukebox/mpv_error.log"
 
 # Забезпечуємо наявність та права на лог-файл перед запуском логера
 if not os.path.exists(LOG_FILE_PATH):
-    open(LOG_FILE_PATH, 'w').close()
+    try:
+        os.makedirs(os.path.dirname(LOG_FILE_PATH), exist_ok=True)
+        open(LOG_FILE_PATH, 'w').close()
+    except Exception:
+        pass
 
 # --- Клас для дублювання виводу в термінал та файл з часовими мітками ---
 class TeeLogger:
@@ -290,14 +294,15 @@ class JukeboxWebHandler(BaseHTTPRequestHandler):
                     .np-info p { margin: 0; font-size: 14px; color: #b0bec5; word-break: break-word; }
 
                     details.folder { background: #1e1e1e; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); overflow: hidden; transition: 0.2s; }
-                    summary { padding: 15px; font-size: 16px; font-weight: bold; color: #4CAF50; cursor: pointer; user-select: none; background: #181818; border-bottom: 1px solid #282828; display: flex; align-items: center; justify-content: space-between; }
+                    summary { padding: 15px; font-size: 16px; font-weight: bold; color: #4CAF50; cursor: pointer; user-select: none; background: #181818; border-bottom: 1px solid #282828; display: flex; align-items: center; justify-content: space-between; touch-action: manipulation; }
                     summary:hover { background: #222; color: #66bb6a; }
                     .folder-content { padding: 15px; }
 
                     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; padding: 0; list-style: none; margin: 0; }
-                    .card { background: #2c2c2c; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+                    .card { background: #2c2c2c; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); touch-action: manipulation; }
                     .card:hover { transform: translateY(-3px); background: #3700b3; }
-                    .card a { color: #fff; text-decoration: none; display: flex; flex-direction: column; height: 100%; }
+                    .card:active { transform: scale(0.97); opacity: 0.85; }
+                    .card a { color: #fff; text-decoration: none; display: flex; flex-direction: column; height: 100%; touch-action: manipulation; }
                     .thumb-container { width: 100%; height: 110px; background: #000; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
                     .thumb-container img { width: 100%; height: 100%; object-fit: cover; }
                     .no-thumb { color: #777; font-size: 12px; }
@@ -415,14 +420,14 @@ def run_video(folder_name, path, total_videos):
 
     osd_message = f"Папка: {folder_name.upper()} ({current_video_index + 1}/{total_videos})"
 
-    # Наша стабільна команда mpv з апаратним декодуванням та безпечним OSD
+    # Надійна команда mpv з безпечним апаратним прискоренням auto та OSD
     cmd = [
         "mpv",
         "--fullscreen",
         "--no-terminal",
         "--quiet",
         "--vo=gpu",
-        "--hwdec=mmal",
+        "--hwdec=auto",
         f"--osd-msg1={osd_message}",
         "--osd-duration=3000",
         path
