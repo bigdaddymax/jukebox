@@ -1,20 +1,60 @@
 import subprocess
 import os
+import sys
 import time
 import glob
 import threading
+from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 from gpiozero import Button
 
-# --- Налаштування шляхів та порту ---
+# --- Налаштування шляхів, порту та логів ---
 HOME_DIR = "/home/pi/movies"
 WEB_PORT = 8080
+LOG_FILE_PATH = "/home/pi/jukebox.log"
+MPV_ERR_LOG = "/home/pi/mpv_error.log"
 
-# --- Призначення 4 кнопок (BCM 6, 13, 19, 26) ---
-PIN_DIR_NEXT = 19    # Наступна папка
+# Забезпечуємо наявність та права на лог-файл перед запуском логера
+if not os.path.exists(LOG_FILE_PATH):
+    open(LOG_FILE_PATH, 'w').close()
+
+# --- Клас для дублювання виводу в термінал та файл з часовими мітками ---
+class TeeLogger:
+    def __init__(self, filename):
+        self.terminal = sys.stdout
+        try:
+            self.log = open(filename, "a", encoding="utf-8")
+        except Exception:
+            self.log = None
+
+    def write(self, message):
+        if message.strip():
+            timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S] ")
+            formatted_message = f"{timestamp}{message}\n"
+            self.terminal.write(formatted_message)
+            if self.log:
+                self.log.write(formatted_message)
+                self.log.flush()
+        else:
+            self.terminal.write(message)
+            if self.log:
+                self.log.write(message)
+                self.log.flush()
+
+    def flush(self):
+        self.terminal.flush()
+        if self.log:
+            self.log.flush()
+
+# Перенаправляємо весь стандартний вивід та помилки в лог-файл
+sys.stdout = TeeLogger(LOG_FILE_PATH)
+sys.stderr = sys.stdout
+
+# --- Призначення 4 кнопок ---
+PIN_DIR_NEXT = 19   # Наступна папка
 PIN_DIR_PREV = 26   # Попередня папка
-PIN_VID_NEXT = 6   # Наступне відео
+PIN_VID_NEXT = 6    # Наступне відео
 PIN_VID_PREV = 13   # Попереднє відео
 
 # --- Глобальний стан ---
@@ -90,7 +130,7 @@ def action_dir_next():
         dir_list = get_directories()
         if not dir_list:
             return
-        print("\n[EVENT] -> Наступна папка (BCM 6)")
+        print(f"[EVENT] -> Наступна папка (BCM {PIN_DIR_NEXT})")
         stop_all()
         current_dir_index = (current_dir_index + 1) % len(dir_list)
         current_video_index = 0
@@ -103,7 +143,7 @@ def action_dir_prev():
         dir_list = get_directories()
         if not dir_list:
             return
-        print("\n[EVENT] <- Попередня папка (BCM 13)")
+        print(f"[EVENT] <- Попередня папка (BCM {PIN_DIR_PREV})")
         stop_all()
         current_dir_index = (current_dir_index - 1) % len(dir_list)
         current_video_index = 0
@@ -120,7 +160,7 @@ def action_vid_next():
         playlist = get_playlist(folder)
         if not playlist:
             return
-        print("\n[EVENT] >> Наступне відео (BCM 19)")
+        print(f"[EVENT] >> Наступне відео (BCM {PIN_VID_NEXT})")
         stop_all()
         current_video_index = (current_video_index + 1) % len(playlist)
         switch_requested = True
@@ -136,13 +176,13 @@ def action_vid_prev():
         playlist = get_playlist(folder)
         if not playlist:
             return
-        print("\n[EVENT] << Попереднє відео (BCM 26)")
+        print(f"[EVENT] << Попереднє відео (BCM {PIN_VID_PREV})")
         stop_all()
         current_video_index = (current_video_index - 1) % len(playlist)
         switch_requested = True
 
 
-# --- Вебсервер з перехопленням обривів з'єднання ---
+# --- Вебсервер ---
 
 class JukeboxWebHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -215,7 +255,7 @@ class JukeboxWebHandler(BaseHTTPRequestHandler):
                         playlist = get_playlist(target_folder)
                         full_target_path = os.path.join(HOME_DIR, target_folder, target_file)
                         if full_target_path in playlist:
-                            print(f"\n[WEB EVENT] Запуск через веб: {target_folder}/{target_file}")
+                            print(f"[WEB EVENT] Запуск через веб: {target_folder}/{target_file}")
                             stop_all()
                             current_dir_index = dir_list.index(target_folder)
                             current_video_index = playlist.index(full_target_path)
@@ -358,7 +398,7 @@ btn_vid_next.when_pressed = action_vid_next
 btn_vid_prev = Button(PIN_VID_PREV, pull_up=True, bounce_time=0.3)
 btn_vid_prev.when_pressed = action_vid_prev
 
-print(f"Ініціалізовано 4 кнопки (BCM {PIN_DIR_NEXT}, {PIN_DIR_PREV}, {PIN_VID_NEXT}, {PIN_VID_PREV})")
+print(f"Ініціалізовано 4 кнопки: Наступна папка (BCM {PIN_DIR_NEXT}), Попередня папка (BCM {PIN_DIR_PREV}), Наступне відео (BCM {PIN_VID_NEXT}), Попереднє відео (BCM {PIN_VID_PREV})")
 
 web_thread = threading.Thread(target=start_web_server, daemon=True)
 web_thread.start()
@@ -369,37 +409,35 @@ def run_video(folder_name, path, total_videos):
     global switch_requested, current_proc
     
     if not os.path.exists(path):
-        print(f"Помилка: Файл {path} не знайдено")
+        print(f"[ПОМИЛКА] Файл {path} не знайдено")
         time.sleep(1)
         return False
 
     osd_message = f"Папка: {folder_name.upper()} ({current_video_index + 1}/{total_videos})"
 
+    # Наша стабільна команда mpv з апаратним декодуванням та безпечним OSD
     cmd = [
         "mpv",
         "--fullscreen",
         "--no-terminal",
         "--quiet",
         "--vo=gpu",
-        "--gpu-context=drm",
-        "--hwdec=v4l2copy",        # Використовуємо коректне прискорення замість auto/cuda
-        "--ao=alsa",               # Увімкнення нормального виводу звуку через ALSA
+        "--hwdec=mmal",
         f"--osd-msg1={osd_message}",
-        "--osd-duration=2500",
-        "--osd-font-size=35",
-        "--osd-align-x=left",
-        "--osd-align-y=top",
+        "--osd-duration=3000",
         path
     ]
     
     print(f"Відтворення [{folder_name.upper()}]: {os.path.basename(path)}")
+    
+    err_log = open(MPV_ERR_LOG, "w")
     
     with state_lock:
         switch_requested = False
         current_proc = subprocess.Popen(
             cmd, 
             stdout=subprocess.DEVNULL, 
-            stderr=None  
+            stderr=err_log  
         )
 
     start_time = time.time()
@@ -408,6 +446,7 @@ def run_video(folder_name, path, total_videos):
     while True:
         with state_lock:
             if switch_requested:
+                err_log.close()
                 if current_proc and current_proc.poll() is None:
                     current_proc.terminate()
                     try:
@@ -421,37 +460,47 @@ def run_video(folder_name, path, total_videos):
                 exit_code = current_proc.poll()
                 run_duration = time.time() - start_time
                 current_proc = None
+                err_log.close()
 
-                if run_duration < 1.5:
-                    print(f"[ПОПЕРЕДЖЕННЯ] mpv завершився занадто швидко (код {exit_code}). Пауза 2 сек...")
-                    time.sleep(2)
+                if os.path.exists(MPV_ERR_LOG):
+                    with open(MPV_ERR_LOG, "r") as f:
+                        err_content = f.read().strip()
+                        if err_content:
+                            print(f"[MPV ERROR LOG]: {err_content}")
+
+                print(f"[MPV STOP] Файл зупинився. Час роботи: {run_duration:.2f} сек. Код виходу: {exit_code}")
+
+                if run_duration < 2.0:
+                    print(f"[ПОПЕРЕДЖЕННЯ] mpv завершився занадто швидко. Пауза 5 сек...")
+                    time.sleep(5)
                 
                 return False
 
         time.sleep(0.1)
 
+
 # --- Головний цикл ---
 try:
     stop_all()
-    print("\nСистема готова. Запуск відтворення...")
+    print("Система готова. Запуск відтворення...")
     
     while True:
         with state_lock:
             dir_list = get_directories()
         
         if not dir_list:
-            print(f"Увага: Не знайдено піддиректорій у {HOME_DIR}. Очікування...")
+            print(f"[УВАГА] Не знайдено піддиректорій у {HOME_DIR}. Очікування...")
             time.sleep(3)
             continue
 
         with state_lock:
             if current_dir_index >= len(dir_list):
                 current_dir_index = 0
-            folder = dir_list[current_dir_index]
+            folder = dir_list[current_dir_index]  
             playlist = get_playlist(folder)
         
         if not playlist:
-            print(f"Порожня папка: {folder}. Перехід далі...")
+            print(f"[УВАГА] Порожня папка: {folder}. Перехід далі...")
             with state_lock:
                 current_dir_index = (current_dir_index + 1) % len(dir_list)
                 current_video_index = 0
@@ -477,4 +526,4 @@ try:
 
 except KeyboardInterrupt:
     stop_all()
-    print("\nВимкнення...")
+    print("Вимкнення...")
