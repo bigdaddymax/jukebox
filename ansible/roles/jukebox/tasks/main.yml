@@ -25,6 +25,18 @@
     mode: '0440'
     validate: 'visudo -cf %s'
 
+- name: Додати користувача maksym до групи gpio,video,render,audio
+  user:
+    name: maksym
+    groups: gpio,video,render,audio
+    append: yes
+
+- name: Встановити пакет python3-lgpio для сумісності з gpiozero
+  apt:
+    name: python3-lgpio
+    state: present
+    update_cache: yes
+
 - name: Створити резервну копію config.txt з безпечною міткою часу
   shell: |
     TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
@@ -58,6 +70,20 @@
     line: '\1\2 video=HDMI-A-1:1920x1080@60e\3'
     backup: no
   notify: Перезавантажити систему
+
+- name: Приховати миготливий курсор при завантаженні
+  lineinfile:
+    path: /boot/firmware/cmdline.txt
+    backrefs: yes
+    regexp: '^(.*rootwait)(.*)$'
+    line: '\1\2 vt.global_cursor_default=0'
+  notify: Перезавантажити систему
+
+- name: Вимкнути getty на tty1 для уникнення екрану логіну
+  systemd:
+    name: getty@tty1
+    enabled: no
+    state: stopped
 
 - name: Створити директорію /opt/jukebox
   file:

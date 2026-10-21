@@ -1,15 +1,19 @@
 [Unit]
-Description=Raspberry Pi Video Jukebox Service
+Description=Video Jukebox Service
 After=network.target sound.target graphical.target
 
 [Service]
 Type=simple
 User=maksym
+Group=maksym
+SupplementaryGroups=gpio video render audio
 WorkingDirectory=/opt/jukebox
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/1000
 ExecStart=/usr/bin/python3 /opt/jukebox/jukebox_v3.py
-Restart=always
+Restart=on-failure
 RestartSec=5
 LogsDirectory=jukebox
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target
