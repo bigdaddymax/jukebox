@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, urlparse
 from gpiozero import Button
 
 # --- Налаштування шляхів, порту та логів ---
-HOME_DIR = "/home/pi/movies"
+HOME_DIR = "movies"
 WEB_PORT = 8080
 LOG_FILE_PATH = '/var/log/jukebox/jukebox.log'
 MPV_ERR_LOG = "/var/log/jukebox/mpv_error.log"
