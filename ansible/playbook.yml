@@ -1,0 +1,5 @@
+---
+- hosts: jukebox
+  become: yes
+  roles:
+    - jukebox

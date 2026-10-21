@@ -1,0 +1,12 @@
+---
+- name: Перезавантажити систему
+  reboot:
+    msg: "Ansible оновив конфігурацію HDMI. Перезавантаження..."
+    connect_timeout: 5
+    reboot_timeout: 60
+
+- name: Перезавантажити systemd та запустити сервіс
+  systemd:
+    daemon_reload: yes
+    name: jukebox
+    state: restarted

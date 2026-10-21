@@ -1,0 +1,93 @@
+---
+- name: Переконатися, що користувач maksym існує та має правильну групу
+  user:
+    name: maksym
+    shell: /bin/bash
+    groups: sudo
+    append: yes
+    state: present
+
+- name: Додати SSH-ключ користувача maksym для безпечного входу
+  authorized_key:
+    user: maksym
+    state: present
+    key: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"  # Бере ваш публічний ключ із ноутбука
+
+- name: Заборонити інтерактивний вхід (login) для користувача pi
+  user:
+    name: pi
+    shell: /usr/sbin/nologin  # Блокує можливість зайти в систему локально чи по SSH
+
+- name: Налаштувати безпарольний sudo для користувача maksym
+  copy:
+    content: "maksym ALL=(ALL) NOPASSWD: ALL"
+    dest: /etc/sudoers.d/maksym
+    mode: '0440'
+    validate: 'visudo -cf %s'
+
+- name: Створити резервну копію config.txt з безпечною міткою часу
+  shell: |
+    TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+    cp /boot/firmware/config.txt "/boot/firmware/config.txt.bak_${TIMESTAMP}"
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Примусово ввімкнути гаряче підключення HDMI у config.txt
+  lineinfile:
+    path: /boot/firmware/config.txt
+    regexp: '^#?hdmi_force_hotplug='
+    line: 'hdmi_force_hotplug=1'
+    state: present
+    backup: no
+  notify: Перезавантажити систему
+
+- name: Створити резервну копію cmdline.txt з безпечною міткою часу
+  shell: |
+    TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+    cp /boot/firmware/cmdline.txt "/boot/firmware/cmdline.txt.bak_${TIMESTAMP}"
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Додати параметр виведення на відеоадаптер у cmdline.txt
+  lineinfile:
+    path: /boot/firmware/cmdline.txt
+    backrefs: yes
+    regexp: '^(.*)(rootwait)(.*)$'
+    line: '\1\2 video=HDMI-A-1:1920x1080@60e\3'
+    backup: no
+  notify: Перезавантажити систему
+
+- name: Створити директорію /opt/jukebox
+  file:
+    path: /opt/jukebox
+    state: directory
+    owner: maksym
+    group: maksym
+    mode: '0755'
+
+- name: Ініціалізувати Git-репозиторій в /opt/jukebox
+  git:
+    repo: 'https://github.com/bigdaddymax/jukebox.git'
+    dest: /opt/jukebox
+    version: master
+    update: yes
+    force: yes
+  become_user: maksym
+
+- name: Скопіювати шаблон systemd-сервісу jukebox
+  template:
+    src: jukebox.service.j2
+    dest: /etc/systemd/system/jukebox.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Перезавантажити systemd та запустити сервіс
+
+- name: Увімкнути та запустити сервіс jukebox
+  systemd:
+    name: jukebox
+    enabled: yes
+    state: started
+    daemon_reload: yes
