@@ -12,8 +12,8 @@ from gpiozero import Button
 # --- Налаштування шляхів, порту та логів ---
 HOME_DIR = "/home/pi/movies"
 WEB_PORT = 8080
-LOG_FILE_PATH = "/home/pi/jukebox.log"
-MPV_ERR_LOG = "/home/pi/mpv_error.log"
+LOG_FILE_PATH = '/var/log/jukebox/jukebox.log'
+MPV_ERR_LOG = "/var/log/jukebox/mpv_error.log"
 
 # Забезпечуємо наявність та права на лог-файл перед запуском логера
 if not os.path.exists(LOG_FILE_PATH):
