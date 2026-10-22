@@ -31,6 +31,24 @@
     groups: gpio,video,render,audio
     append: yes
 
+- name: Вимкнути енергоощадження для Wi-Fi (перерви зв'язку)
+  copy:
+    dest: /etc/NetworkManager/conf.d/default-wifi-powersave-on.conf
+    content: |
+      [connection]
+      wifi.powersave = 2
+
+- name: Встановити та увімкнути avahi-daemon для mDNS (jukebox.local)
+  apt:
+    name: avahi-daemon
+    state: present
+    update_cache: yes
+  notify: Перезапустити avahi-daemon
+
+- name: Встановити системний hostname як jukebox
+  hostname:
+    name: jukebox
+
 - name: Встановити пакет python3-lgpio для сумісності з gpiozero
   apt:
     name: python3-lgpio
