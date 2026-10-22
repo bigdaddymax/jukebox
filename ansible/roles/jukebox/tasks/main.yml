@@ -38,6 +38,12 @@
       [connection]
       wifi.powersave = 2
 
+- name: Вимкнути HDMI CEC (щоб Pi не вмикав телевізор при ребуті)
+  lineinfile:
+    path: /boot/firmware/config.txt
+    regexp: '^#?hdmi_ignore_cec_init'
+    line: 'hdmi_ignore_cec_init=1'
+
 - name: Встановити та увімкнути avahi-daemon для mDNS (jukebox.local)
   apt:
     name: avahi-daemon
@@ -135,3 +141,10 @@
     enabled: yes
     state: started
     daemon_reload: yes
+
+- name: Запланувати щоденне перезавантаження о 01:00 ночі
+  cron:
+    name: "Щоденний перезапуск jukebox"
+    minute: "0"
+    hour: "1"
+    job: "/sbin/reboot"
