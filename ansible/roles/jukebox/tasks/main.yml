@@ -38,6 +38,32 @@
       [connection]
       wifi.powersave = 2
 
+- name: Увімкнути нескінченні спроби автопідключення Wi-Fi
+  copy:
+    dest: /etc/NetworkManager/conf.d/wifi-retries.conf
+    content: |
+      [connection]
+      connection.autoconnect-retries = -1
+  notify: Перезапустити NetworkManager
+
+- name: Створити скрипт перевірки мережі (wifi-watchdog.sh)
+  copy:
+    dest: /opt/jukebox/wifi-watchdog.sh
+    mode: '0755'
+    content: |
+      #!/bin/bash
+      GATEWAY=$(ip route | grep default | awk '{print $3}')
+      if ! ping -c 2 -W 5 $GATEWAY > /dev/null 2>&1; then
+          logger "Wi-Fi connection lost. Restarting network..."
+          nmcli networking off && sleep 2 && nmcli networking on
+      fi
+
+- name: Додати перевірку Wi-Fi у cron (кожні 10 хвилин)
+  cron:
+    name: "Wi-Fi Watchdog"
+    minute: "*/10"
+    job: "/opt/jukebox/wifi-watchdog.sh"
+
 - name: Вимкнути HDMI CEC (щоб Pi не вмикав телевізор при ребуті)
   lineinfile:
     path: /boot/firmware/config.txt

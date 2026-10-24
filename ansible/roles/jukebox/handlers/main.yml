@@ -10,3 +10,14 @@
     daemon_reload: yes
     name: jukebox
     state: restarted
+
+- name: Перезапустити NetworkManager
+  systemd:
+    name: NetworkManager
+    state: restarted
+
+- name: Перезапустити систему
+  reboot:
+    msg: "Перезавантаження після оновлення конфігурації jukebox"
+    connect_timeout: 5
+    reboot_timeout: 300
