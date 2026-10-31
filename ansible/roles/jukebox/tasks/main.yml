@@ -174,3 +174,18 @@
     minute: "0"
     hour: "1"
     job: "/sbin/reboot"
+
+- name: Встановити Tailscale
+  shell: curl -fsSL https://tailscale.com/install.sh | sh
+  args:
+    creates: /usr/bin/tailscale
+
+- name: Увімкнути та запустити службу tailscaled
+  systemd:
+    name: tailscaled
+    enabled: yes
+    state: started
+- name: Авторизувати пристрій у мережі Tailscale
+  command: tailscale up --authkey={{ tailscale_authkey }} --accept-routes --reset
+  register: tailscale_res
+  changed_when: "'Logged in' in tailscale_res.stdout"
