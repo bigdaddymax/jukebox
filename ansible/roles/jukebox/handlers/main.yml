@@ -21,3 +21,8 @@
     msg: "Перезавантаження після оновлення конфігурації jukebox"
     connect_timeout: 5
     reboot_timeout: 300
+
+- name: Перезапустити systemd-journald
+  systemd:
+    name: systemd-journald
+    state: restarted

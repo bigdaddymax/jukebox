@@ -420,14 +420,14 @@ def run_video(folder_name, path, total_videos):
 
     osd_message = f"Папка: {folder_name.upper()} ({current_video_index + 1}/{total_videos})"
 
-    # Надійна команда mpv з безпечним апаратним прискоренням auto та OSD
+    # Надійна команда mpv з апаратним декодуванням v4l2m2m-copy та детальним дебаг-логом
     cmd = [
         "mpv",
         "--fullscreen",
         "--no-terminal",
-        "--quiet",
-        "--vo=gpu",
-        "--hwdec=auto",
+        "--vo=drm",
+        "--hwdec=v4l2m2m-copy",
+        "--msg-level=all=v",
         f"--osd-msg1={osd_message}",
         "--osd-duration=3000",
         path
@@ -441,7 +441,7 @@ def run_video(folder_name, path, total_videos):
         switch_requested = False
         current_proc = subprocess.Popen(
             cmd, 
-            stdout=subprocess.DEVNULL, 
+            stdout=err_log, 
             stderr=err_log  
         )
 
@@ -467,11 +467,14 @@ def run_video(folder_name, path, total_videos):
                 current_proc = None
                 err_log.close()
 
+                # Перевіряємо лог виконання mpv на наявність рядка залізного декодера
                 if os.path.exists(MPV_ERR_LOG):
                     with open(MPV_ERR_LOG, "r") as f:
-                        err_content = f.read().strip()
-                        if err_content:
-                            print(f"[MPV ERROR LOG]: {err_content}")
+                        log_content = f.read()
+                        if "Using hardware decoding" in log_content:
+                            print("[MPV DECODER STATUS]: Апаратне декодування успішно активовано!")
+                        else:
+                            print("[MPV DECODER STATUS]: Увага! Апаратне декодування не виявлено в логах.")
 
                 print(f"[MPV STOP] Файл зупинився. Час роботи: {run_duration:.2f} сек. Код виходу: {exit_code}")
 
