@@ -9,7 +9,8 @@ Group=maksym
 SupplementaryGroups=gpio video render audio
 WorkingDirectory=/opt/jukebox
 Environment=DISPLAY=:0
-Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=XAUTHORITY=/home/maksym/.Xauthority
+Environment=XDG_RUNTIME_DIR=/run/jukebox
 ExecStart=/usr/bin/python3 /opt/jukebox/jukebox_v3.py
 Restart=on-failure
 RestartSec=5
