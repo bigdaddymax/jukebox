@@ -13,7 +13,7 @@ from gpiozero import Button
 HOME_DIR = "movies"
 WEB_PORT = 8080
 LOG_FILE_PATH = '/var/log/jukebox/jukebox.log'
-MPV_ERR_LOG = "/var/log/jukebox/mpv_error.log"
+VLC_ERR_LOG = "/var/log/jukebox/vlc_error.log"
 
 # Забезпечуємо наявність та права на лог-файл перед запуском логера
 if not os.path.exists(LOG_FILE_PATH):
@@ -85,9 +85,11 @@ def stop_all():
             current_proc.kill()
     current_proc = None
 
-    subprocess.run(["sudo", "killall", "-9", "mpv"], 
+    subprocess.run(["sudo", "killall", "-9", "cvlc"], 
                    stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-    time.sleep(0.2)
+    subprocess.run(["sudo", "killall", "-9", "vlc"], 
+                   stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+    time.sleep(0.3)
 
 
 def get_directories():
@@ -106,8 +108,18 @@ def get_playlist(folder_name):
         return []
     return sorted(
         glob.glob(os.path.join(folder_path, "*.mp4")) +
-        glob.glob(os.path.join(folder_path, "*.mkv"))
+        glob.glob(os.path.join(folder_path, "*.mkv")) +
+        glob.glob(os.path.join(folder_path, "*.webm"))
     )
+
+
+def find_subtitle_file(video_path):
+    """Шукає зовнішній файл субтитрів (.srt) з такою ж назвою."""
+    base, _ = os.path.splitext(video_path)
+    sub_path = base + ".srt"
+    if os.path.exists(sub_path):
+        return sub_path
+    return None
 
 
 def generate_thumbnail_if_missing(video_path):
@@ -418,19 +430,30 @@ def run_video(folder_name, path, total_videos):
         time.sleep(1)
         return False
 
-    osd_message = f"Папка: {folder_name.upper()} ({current_video_index + 1}/{total_videos})"
+    # Шукаємо зовнішній файл субтитрів (.srt)
+    sub_file = find_subtitle_file(path)
 
-    # Надійна команда cvlc
+    # Стабільна команда cvlc з параметрами субтитрів та синхронізації годинника
     cmd = [
-      "cvlc",
-      "--play-and-exit",
-      "--sub-track", "0",
-      path
+        "cvlc",
+        "--play-and-exit",
+        "-q",                   # Тихий режим (мінімум виводу)
+        "--no-osd",             # Вимкнути екранні сповіщення VLC
+        "--network-caching=50", # Мінімальний буфер для локальних файлів
+        "--clock-jitter=0",     # Усунути джиттер годинника
+        "--sync",               # Примусово синхронізувати відео зі звуком
+        "--sub-autodetect-file",# Автоматично шукати субтитри поруч із відео
+        "--sub-track", "0",     # Примусово ввімкнути першу доріжку субтитрів
     ]
+
+    if sub_file:
+        cmd.extend(["--sub-file", sub_file])
+
+    cmd.append(path)
     
     print(f"Відтворення [{folder_name.upper()}]: {os.path.basename(path)}")
     
-    err_log = open(MPV_ERR_LOG, "w")
+    err_log = open(VLC_ERR_LOG, "w")
     
     with state_lock:
         switch_requested = False
@@ -441,7 +464,7 @@ def run_video(folder_name, path, total_videos):
         )
 
     start_time = time.time()
-    time.sleep(0.8)
+    time.sleep(0.5)
 
     while True:
         with state_lock:
@@ -462,19 +485,10 @@ def run_video(folder_name, path, total_videos):
                 current_proc = None
                 err_log.close()
 
-                # Перевіряємо лог виконання mpv на наявність рядка залізного декодера
-                if os.path.exists(MPV_ERR_LOG):
-                    with open(MPV_ERR_LOG, "r") as f:
-                        log_content = f.read()
-                        if "Using hardware decoding" in log_content:
-                            print("[MPV DECODER STATUS]: Апаратне декодування успішно активовано!")
-                        else:
-                            print("[MPV DECODER STATUS]: Увага! Апаратне декодування не виявлено в логах.")
-
-                print(f"[MPV STOP] Файл зупинився. Час роботи: {run_duration:.2f} сек. Код виходу: {exit_code}")
+                print(f"[VLC STOP] Файл зупинився. Час роботи: {run_duration:.2f} сек. Код виходу: {exit_code}")
 
                 if run_duration < 2.0:
-                    print(f"[ПОПЕРЕДЖЕННЯ] mpv завершився занадто швидко. Пауза 5 сек...")
+                    print(f"[ПОПЕРЕДЖЕННЯ] cvlc завершився занадто швидко. Пауза 5 сек...")
                     time.sleep(5)
                 
                 return False
