@@ -1,4 +1,13 @@
 ---
+- name: Install media player package
+  ansible.builtin.apt:
+    name:
+      - vlc
+      - python3-pip
+      # - mpv  # можна закоментувати або видалити, якщо більше не використовується
+    state: present
+    update_cache: yes
+
 - name: Переконатися, що користувач maksym існує та має правильну групу
   user:
     name: maksym

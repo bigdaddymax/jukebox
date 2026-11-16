@@ -420,17 +420,12 @@ def run_video(folder_name, path, total_videos):
 
     osd_message = f"Папка: {folder_name.upper()} ({current_video_index + 1}/{total_videos})"
 
-    # Надійна команда mpv з апаратним декодуванням v4l2m2m-copy та детальним дебаг-логом
+    # Надійна команда cvlc
     cmd = [
-        "mpv",
-        "--fullscreen",
-        "--no-terminal",
-        "--vo=drm",
-        "--hwdec=v4l2m2m-copy",
-        "--msg-level=all=v",
-        f"--osd-msg1={osd_message}",
-        "--osd-duration=3000",
-        path
+      "cvlc",
+      "--play-and-exit",
+      "--sub-track", "0",
+      path
     ]
     
     print(f"Відтворення [{folder_name.upper()}]: {os.path.basename(path)}")
