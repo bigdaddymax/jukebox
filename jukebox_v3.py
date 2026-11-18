@@ -444,8 +444,7 @@ def run_video(folder_name, path, total_videos):
         "--video-title-show",
         "--video-title-timeout", "4000",
         "--input-title-format", title_string,
-        "--sub-track", "0",
-        os.path.join(folder_path, file_name)
+        "--sub-track", "0"
     ]
 
     cmd.append(path)
