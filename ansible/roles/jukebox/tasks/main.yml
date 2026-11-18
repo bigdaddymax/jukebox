@@ -143,21 +143,13 @@
     executable: /bin/bash
   changed_when: false
 
-- name: Додати параметр виведення на відеоадаптер у cmdline.txt
+- name: Configure robust boot parameters in cmdline.txt (video and silent boot)
   lineinfile:
     path: /boot/firmware/cmdline.txt
+    regexp: '^(?!.*\bquiet\b)(.*rootwait)(.*)$'
+    line: '\1\2 video=HDMI-A-1:1920x1080@60e quiet splash loglevel=3 logo.nologo vt.global_cursor_default=0 systemd.show_status=false'
     backrefs: yes
-    regexp: '^(.*)(rootwait)(.*)$'
-    line: '\1\2 video=HDMI-A-1:1920x1080@60e\3'
     backup: no
-  notify: Перезавантажити систему
-
-- name: Повністю приховати логи завантаження у cmdline.txt
-  lineinfile:
-    path: /boot/firmware/cmdline.txt
-    backrefs: yes
-    regexp: '^(.*rootwait)(.*)$'
-    line: '\1\2 quiet splash loglevel=3 logo.nologo vt.global_cursor_default=0 systemd.show_status=false'
   notify: Перезавантажити систему
 
 - name: Вимкнути getty на tty1 для уникнення екрану логіну

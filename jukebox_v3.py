@@ -178,6 +178,9 @@ def action_vid_next():
             return
         print(f"[EVENT] >> Наступне відео (BCM {PIN_VID_NEXT})")
         stop_all()
+        if current_video_index + 1 == len(playlist):
+            action_dir_next()
+            return
         current_video_index = (current_video_index + 1) % len(playlist)
         switch_requested = True
 
@@ -194,6 +197,9 @@ def action_vid_prev():
             return
         print(f"[EVENT] << Попереднє відео (BCM {PIN_VID_PREV})")
         stop_all()
+        if current_video_index == 0:
+            action_dir_prev()
+            return 
         current_video_index = (current_video_index - 1) % len(playlist)
         switch_requested = True
 
