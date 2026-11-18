@@ -439,24 +439,20 @@ def run_video(folder_name, path, total_videos):
     # Шукаємо зовнішній файл субтитрів (.srt)
     sub_file = find_subtitle_file(path)
 
-    # Приклад з формування шляхів та назв у скрипті:
-    folder_name = os.path.basename(current_folder_path)
-    file_name = current_folder_files[current_file_index]
-    total_files = len(current_folder_files)
+    folder_name = os.path.basename(folder_path)  # Використовуємо правильну назву аргументу
 
-    # Формуємо текст, який з'явиться на екрані: наприклад, "Папка / Відео 3 з 12"
-    title_string = f"[{folder_name}]  ({current_file_index + 1}/{total_files}) {os.path.splitext(file_name)[0]}"
+    title_string = f"[{folder_name}]  ({file_index + 1}/{total_files}) {os.path.splitext(file_name)[0]}"
 
     cmd = [
         "cvlc",
         "--play-and-exit",
-        "--video-title-show",  # Увімкнути показ заголовка на екрані
-        "--video-title-timeout", "4000",  # Час показу у мілісекундах (4 секунди)
-        "--input-title-format", title_string,  # Наш кастомний текст заголовка
+        "--video-title-show",
+        "--video-title-timeout", "4000",
+        "--input-title-format", title_string,
         "--sub-track", "0",
-        os.path.join(current_folder_path, file_name)
+        os.path.join(folder_path, file_name)
     ]
-
+    
     if sub_file:
         cmd.extend(["--sub-file", sub_file])
 
