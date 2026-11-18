@@ -436,12 +436,7 @@ def run_video(folder_name, path, total_videos):
         time.sleep(1)
         return False
 
-    # Шукаємо зовнішній файл субтитрів (.srt)
-    sub_file = find_subtitle_file(path)
-
-    folder_name = os.path.basename(folder_path)  # Використовуємо правильну назву аргументу
-
-    title_string = f"[{folder_name}]  ({file_index + 1}/{total_files}) {os.path.splitext(file_name)[0]}"
+    title_string = f"[{folder_name}]  ({current_video_index + 1}/{total_videos}) {os.path.splitext(path)[0]}"
 
     cmd = [
         "cvlc",
@@ -452,9 +447,6 @@ def run_video(folder_name, path, total_videos):
         "--sub-track", "0",
         os.path.join(folder_path, file_name)
     ]
-    
-    if sub_file:
-        cmd.extend(["--sub-file", sub_file])
 
     cmd.append(path)
     
