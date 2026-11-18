@@ -439,17 +439,22 @@ def run_video(folder_name, path, total_videos):
     # Шукаємо зовнішній файл субтитрів (.srt)
     sub_file = find_subtitle_file(path)
 
-    # Стабільна команда cvlc з параметрами субтитрів та синхронізації годинника
+    # Приклад з формування шляхів та назв у скрипті:
+    folder_name = os.path.basename(current_folder_path)
+    file_name = current_folder_files[current_file_index]
+    total_files = len(current_folder_files)
+
+    # Формуємо текст, який з'явиться на екрані: наприклад, "Папка / Відео 3 з 12"
+    title_string = f"[{folder_name}]  ({current_file_index + 1}/{total_files}) {os.path.splitext(file_name)[0]}"
+
     cmd = [
         "cvlc",
         "--play-and-exit",
-        #"-q",                   # Тихий режим (мінімум виводу)
-        #"--no-osd",             # Вимкнути екранні сповіщення VLC
-        #"--network-caching=50", # Мінімальний буфер для локальних файлів
-        #"--clock-jitter=0",     # Усунути джиттер годинника
-        #"--sync",               # Примусово синхронізувати відео зі звуком
-        #"--sub-autodetect-file",# Автоматично шукати субтитри поруч із відео
-        "--sub-track", "0",     # Примусово ввімкнути першу доріжку субтитрів
+        "--video-title-show",  # Увімкнути показ заголовка на екрані
+        "--video-title-timeout", "4000",  # Час показу у мілісекундах (4 секунди)
+        "--input-title-format", title_string,  # Наш кастомний текст заголовка
+        "--sub-track", "0",
+        os.path.join(current_folder_path, file_name)
     ]
 
     if sub_file:
