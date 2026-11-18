@@ -67,7 +67,7 @@ current_video_index = 0
 
 switch_requested = False
 current_proc = None
-state_lock = threading.Lock()
+state_lock = threading.RLock()
 
 
 def prepare_screen():
@@ -199,7 +199,7 @@ def action_vid_prev():
         stop_all()
         if current_video_index == 0:
             action_dir_prev()
-            return 
+            return
         current_video_index = (current_video_index - 1) % len(playlist)
         switch_requested = True
 
