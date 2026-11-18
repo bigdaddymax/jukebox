@@ -212,15 +212,37 @@
     creates: /usr/bin/tailscale
 
 - name: Увімкнути та запустити службу tailscaled
-  systemd:
+  ansible.builtin.systemd:
     name: tailscaled
     enabled: yes
     state: started
 
-- name: Авторизувати пристрій у мережі Tailscale
-  command: tailscale up --authkey={{ tailscale_authkey }} --accept-routes --reset
+- name: Авторизувати пристрій у мережі Tailscale без перехоплення DNS
+  ansible.builtin.command: tailscale up --authkey={{ tailscale_authkey }} --accept-routes --accept-dns=false --reset
   register: tailscale_res
   changed_when: "'Logged in' in tailscale_res.stdout"
+
+- name: Встановити та увімкнути systemd-resolved (якщо він відсутній)
+  ansible.builtin.apt:
+    name: systemd-resolved
+    state: present
+    update_cache: yes
+
+- name: Увімкнути та запустити службу systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: started
+    enabled: yes
+
+- name: Прописати основні та резервні DNS у systemd-resolved
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/resolved.conf
+    regexp: '^{{ item.key }}='
+    line: '{{ item.key }}={{ item.value }}'
+  loop:
+    - { key: 'DNS', value: '1.1.1.1 8.8.8.8' }
+    - { key: 'FallbackDNS', value: '1.0.0.1 8.8.4.4' }
+  notify: Restart systemd-resolved
 
 - name: Встановити часовий пояс (America/Los_Angeles)
   timezone:
