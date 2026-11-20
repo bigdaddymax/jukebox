@@ -203,20 +203,34 @@
   args:
     creates: /usr/bin/tailscale
 
-- name: Встановити та увімкнути systemd-resolved (якщо він відсутній)
+- name: Встановити systemd-resolved (якщо він відсутній)
   ansible.builtin.apt:
     name: systemd-resolved
     state: present
     update_cache: yes
 
-- name: Прописати основні та резервні DNS у systemd-resolved
-  ansible.builtin.lineinfile:
-    path: /etc/systemd/resolved.conf
-    regexp: '^#?{{ item.key }}='
-    line: '{{ item.key }}={{ item.value }}'
-  loop:
-    - { key: 'DNS', value: '1.1.1.1 8.8.8.8' }
-    - { key: 'FallbackDNS', value: '1.0.0.1 8.8.4.4' }
+- name: Створити директорію для додаткових конфігів systemd-resolved
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    mode: '0755'
+
+- name: Зафіксувати основні та резервні DNS у systemd-resolved
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/99-jukebox-dns.conf
+    mode: '0644'
+    content: |
+      [Resolve]
+      DNS=1.1.1.1 8.8.8.8
+      FallbackDNS=1.0.0.1 8.8.4.4
+  notify: Restart systemd-resolved
+
+- name: Переконатися, що /etc/resolv.conf вказує на stub-resolv.conf
+  ansible.builtin.file:
+    src: /run/systemd/resolve/stub-resolv.conf
+    dest: /etc/resolv.conf
+    state: link
+    force: yes
   notify: Restart systemd-resolved
 
 - name: Застосувати зміни systemd-resolved одразу
@@ -249,6 +263,18 @@
   register: tailscale_res
   changed_when: tailscale_res.rc == 0 and ('Logged in' in tailscale_res.stdout or ts_status.rc != 0)
 
+- name: Перевірити, чи призначена IPv4-адреса на інтерфейсі tailscale0
+  ansible.builtin.shell: ip -4 addr show tailscale0 | grep -qE 'inet 100\.'
+  register: ts_ip_check
+  changed_when: false
+  failed_when: false
+
+- name: Перезапустити tailscaled, якщо tailscale0 не має IPv4-адреси
+  ansible.builtin.systemd:
+    name: tailscaled
+    state: restarted
+  when: ts_ip_check.rc != 0
+  
 - name: Встановити часовий пояс (America/Los_Angeles)
   timezone:
     name: "America/Los_Angeles"
