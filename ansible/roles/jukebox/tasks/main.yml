@@ -199,20 +199,9 @@
     job: "/sbin/reboot"
 
 - name: Встановити Tailscale
-  shell: curl -fsSL https://tailscale.com/install.sh | sh
+  ansible.builtin.shell: curl -fsSL https://tailscale.com/install.sh | sh
   args:
     creates: /usr/bin/tailscale
-
-- name: Увімкнути та запустити службу tailscaled
-  ansible.builtin.systemd:
-    name: tailscaled
-    enabled: yes
-    state: started
-
-- name: Авторизувати пристрій у мережі Tailscale без перехоплення DNS
-  ansible.builtin.command: tailscale up --authkey={{ tailscale_authkey }} --accept-routes --accept-dns=false --reset
-  register: tailscale_res
-  changed_when: "'Logged in' in tailscale_res.stdout"
 
 - name: Встановити та увімкнути systemd-resolved (якщо він відсутній)
   ansible.builtin.apt:
@@ -220,21 +209,45 @@
     state: present
     update_cache: yes
 
-- name: Увімкнути та запустити службу systemd-resolved
-  ansible.builtin.systemd:
-    name: systemd-resolved
-    state: started
-    enabled: yes
-
 - name: Прописати основні та резервні DNS у systemd-resolved
   ansible.builtin.lineinfile:
     path: /etc/systemd/resolved.conf
-    regexp: '^{{ item.key }}='
+    regexp: '^#?{{ item.key }}='
     line: '{{ item.key }}={{ item.value }}'
   loop:
     - { key: 'DNS', value: '1.1.1.1 8.8.8.8' }
     - { key: 'FallbackDNS', value: '1.0.0.1 8.8.4.4' }
   notify: Restart systemd-resolved
+
+- name: Застосувати зміни systemd-resolved одразу
+  ansible.builtin.meta: flush_handlers
+
+- name: Увімкнути та запустити службу systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    enabled: yes
+    state: started
+
+- name: Увімкнути та запустити службу tailscaled
+  ansible.builtin.systemd:
+    name: tailscaled
+    enabled: yes
+    state: started
+
+- name: Перевірити поточний стан Tailscale
+  ansible.builtin.command: tailscale status --json
+  register: ts_status
+  changed_when: false
+  failed_when: false
+
+- name: Авторизувати пристрій у мережі Tailscale без перехоплення DNS
+  ansible.builtin.command: >
+    tailscale up
+    {% if ts_status.rc != 0 or 'Running' not in ts_status.stdout %}--authkey={{ tailscale_authkey }}{% endif %}
+    --accept-routes
+    --accept-dns=false
+  register: tailscale_res
+  changed_when: tailscale_res.rc == 0 and ('Logged in' in tailscale_res.stdout or ts_status.rc != 0)
 
 - name: Встановити часовий пояс (America/Los_Angeles)
   timezone:
